@@ -26,6 +26,7 @@ const DHAKA: [number, number] = [90.4074, 23.7806];
 const ROUTE_SOURCE = 'poth-route';
 const CASING_LAYER = 'poth-route-casing';
 const LINE_LAYER = 'poth-route-line';
+const DASH_LAYER = 'poth-route-dash';
 const STOP_SOURCE = 'poth-stops';
 const STOP_LAYER = 'poth-stops-layer';
 
@@ -90,9 +91,12 @@ function boundsOf(features: ReturnType<typeof legFeatures>): LngLatBoundsLike | 
 export default function JourneyMap({
   itinerary,
   height = 420,
+  fill = false,
 }: {
   itinerary?: Itinerary;
   height?: number | string;
+  /** Fill the nearest positioned ancestor instead of using a fixed height. */
+  fill?: boolean;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<MapLibreMap | null>(null);
@@ -152,6 +156,10 @@ export default function JourneyMap({
   }, [itinerary?.id, scheme]);
 
   function draw(m: MapLibreMap) {
+    // Leave room for the floating results panel and the bottom composer.
+    const fitPadding = fill
+      ? { top: 80, bottom: 190, left: window.innerWidth > 900 ? 460 : 60, right: 60 }
+      : 48;
     const features = itinerary ? legFeatures(itinerary, scheme) : [];
     const stops = itinerary ? stopFeatures(itinerary) : [];
 
@@ -178,12 +186,17 @@ export default function JourneyMap({
         id: LINE_LAYER,
         type: 'line',
         source: ROUTE_SOURCE,
+        filter: ['!', ['get', 'dashed']],
         layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: {
-          'line-color': ['get', 'color'],
-          'line-width': 5,
-          'line-dasharray': ['case', ['get', 'dashed'], ['literal', [1.6, 1.4]], ['literal', [1, 0]]],
-        },
+        paint: { 'line-color': ['get', 'color'], 'line-width': 5 },
+      });
+      m.addLayer({
+        id: DASH_LAYER,
+        type: 'line',
+        source: ROUTE_SOURCE,
+        filter: ['get', 'dashed'],
+        layout: { 'line-cap': 'butt', 'line-join': 'round' },
+        paint: { 'line-color': ['get', 'color'], 'line-width': 5, 'line-dasharray': [1.6, 1.4] },
       });
     }
 
@@ -213,7 +226,7 @@ export default function JourneyMap({
 
     const bounds = boundsOf(features);
     if (bounds) {
-      m.fitBounds(bounds, { padding: 56, maxZoom: 15, duration: 600 });
+      m.fitBounds(bounds, { padding: fitPadding, maxZoom: 15, duration: 600 });
     }
   }
 
@@ -221,13 +234,18 @@ export default function JourneyMap({
     <Box
       ref={container}
       sx={{
-        height,
-        width: '100%',
-        borderRadius: 4,
-        overflow: 'hidden',
-        border: '1px solid',
-        borderColor: 'divider',
+        ...(fill
+          ? { position: 'absolute', inset: 0 }
+          : {
+              height,
+              width: '100%',
+              borderRadius: 2,
+              overflow: 'hidden',
+              border: '1px solid',
+              borderColor: 'divider',
+            }),
         '& .maplibregl-ctrl-attrib': { fontSize: 10 },
+        '& .maplibregl-ctrl-bottom-left': { display: 'none' },
       }}
     />
   );

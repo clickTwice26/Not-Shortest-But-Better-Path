@@ -54,7 +54,7 @@ function paletteFor(scheme: M3Scheme, mode: 'light' | 'dark') {
 }
 
 // M3 shape scale.
-const SHAPE = { xs: 4, sm: 8, md: 12, lg: 16, xl: 28 };
+const SHAPE = { xs: 4, sm: 6, md: 8, lg: 12, xl: 16 };
 
 export const theme = createTheme({
   cssVariables: { colorSchemeSelector: 'class' },
@@ -101,23 +101,23 @@ export const theme = createTheme({
       defaultProps: { elevation: 0 },
       styleOverrides: {
         root: {
-          borderRadius: SHAPE.xl,
+          borderRadius: SHAPE.lg,
           border: '1px solid var(--mui-palette-divider)',
-          backgroundColor: 'var(--mui-palette-background-surfaceContainerLow)',
+          backgroundColor: 'var(--mui-palette-background-surfaceContainerLowest)',
         },
       },
     },
     MuiButton: {
       defaultProps: { disableElevation: true },
       styleOverrides: {
-        root: { borderRadius: 999, paddingInline: 20, minHeight: 40 },
-        sizeLarge: { minHeight: 48, paddingInline: 24, fontSize: '0.9375rem' },
+        root: { borderRadius: SHAPE.md, paddingInline: 18, minHeight: 40 },
+        sizeLarge: { minHeight: 46, paddingInline: 22, fontSize: '0.9375rem' },
       },
     },
     MuiToggleButton: {
       styleOverrides: {
         root: {
-          borderRadius: 999,
+          borderRadius: `${SHAPE.md}px !important`,
           textTransform: 'none',
           borderColor: 'var(--mui-palette-divider)',
           '&.Mui-selected': {
@@ -129,13 +129,13 @@ export const theme = createTheme({
     },
     MuiToggleButtonGroup: {
       styleOverrides: {
-        grouped: { borderRadius: '999px !important', marginInlineEnd: 8, border: '1px solid' },
+        grouped: { marginInlineEnd: 6, border: '1px solid' },
       },
     },
     MuiChip: {
       styleOverrides: {
         root: { borderRadius: SHAPE.sm, fontWeight: 500 },
-        sizeSmall: { height: 24 },
+        sizeSmall: { height: 24, fontSize: '0.75rem' },
       },
     },
     MuiOutlinedInput: {
@@ -148,13 +148,12 @@ export const theme = createTheme({
     },
     MuiSlider: {
       styleOverrides: {
-        root: { height: 6 },
+        root: { height: 4, padding: '13px 0' },
         rail: { opacity: 1, backgroundColor: 'var(--mui-palette-divider)' },
         thumb: {
-          width: 6,
-          height: 28,
-          borderRadius: 3,
-          '&::after': { width: 28, height: 40 },
+          width: 16,
+          height: 16,
+          '&::after': { width: 32, height: 32 },
         },
         track: { border: 'none' },
         mark: { display: 'none' },

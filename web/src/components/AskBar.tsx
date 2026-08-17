@@ -4,7 +4,6 @@ import { useState } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
-import InputAdornment from '@mui/material/InputAdornment';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
@@ -44,20 +43,16 @@ export default function AskBar({
   return (
     <Box
       sx={{
-        p: { xs: 2.5, md: 3 },
-        borderRadius: 7,
+        p: { xs: 2, md: 2.5 },
+        borderRadius: 3,
         border: '1px solid',
-        borderColor: 'primary.main',
-        background: (t) =>
-          `linear-gradient(135deg, ${alpha(t.palette.primary.main, 0.1)}, ${alpha(
-            t.palette.info.main,
-            0.08,
-          )})`,
+        borderColor: (t) => alpha(t.palette.primary.main, 0.45),
+        bgcolor: (t) => alpha(t.palette.primary.main, 0.05),
       }}
     >
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
-        <AutoAwesomeIcon fontSize="small" color="primary" />
-        <Typography variant="h6">Just say where you're going</Typography>
+        <AutoAwesomeIcon sx={{ fontSize: 18 }} color="primary" />
+        <Typography variant="subtitle1">Just say where you're going</Typography>
         <Box sx={{ flex: 1 }} />
         <Chip
           size="small"
@@ -67,16 +62,16 @@ export default function AskBar({
         />
       </Stack>
 
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Bangla, Banglish or English. Say how much of a hurry you're in and it sets the sliders for
-        you.
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+        Bangla, Banglish or English — mention a hurry or a budget and it sets the sliders.
       </Typography>
 
       <TextField
         fullWidth
         multiline
         minRows={2}
-        maxRows={4}
+        maxRows={3}
+        size="small"
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
@@ -88,30 +83,23 @@ export default function AskBar({
         placeholder={EXAMPLES[0]}
         slotProps={{
           input: {
-            sx: { fontSize: '1.05rem', bgcolor: 'background.surfaceContainerLowest' },
-            startAdornment: (
-              <InputAdornment position="start" sx={{ alignSelf: 'flex-start', mt: 1.5 }}>
-                <AutoAwesomeIcon fontSize="small" color="primary" />
-              </InputAdornment>
-            ),
+            sx: { fontSize: '0.95rem', bgcolor: 'background.surfaceContainerLowest' },
           },
         }}
       />
 
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 1.5 }}>
-        <Button
-          variant="contained"
-          size="large"
-          fullWidth
-          startIcon={<AutoAwesomeIcon />}
-          onClick={() => send()}
-          disabled={!text.trim() || loading}
-        >
-          {loading ? 'Reading…' : 'Plan this trip'}
-        </Button>
-      </Stack>
+      <Button
+        variant="contained"
+        fullWidth
+        startIcon={<AutoAwesomeIcon />}
+        onClick={() => send()}
+        disabled={!text.trim() || loading}
+        sx={{ mt: 1.25 }}
+      >
+        {loading ? 'Reading…' : 'Plan this trip'}
+      </Button>
 
-      <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap', mt: 1.5 }}>
+      <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap', mt: 1.25 }}>
         {EXAMPLES.map((ex) => (
           <Chip
             key={ex}
@@ -123,8 +111,8 @@ export default function AskBar({
               setText(ex);
               send(ex);
             }}
-            label={ex.length > 34 ? `${ex.slice(0, 34)}…` : ex}
-            sx={{ maxWidth: '100%' }}
+            label={ex.length > 28 ? `${ex.slice(0, 28)}…` : ex}
+            sx={{ maxWidth: '100%', fontWeight: 400 }}
           />
         ))}
       </Stack>
