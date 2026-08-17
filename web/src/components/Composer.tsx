@@ -33,12 +33,15 @@ export default function Composer({
   loading,
   geminiActive,
   summary,
+  leftOffset = 0,
 }: {
   onSubmit: (text: string) => void;
   onOpenSettings: () => void;
   loading: boolean;
   geminiActive?: boolean;
   summary?: string;
+  /** Width to clear on the left so the results rail can run full height. */
+  leftOffset?: number;
 }) {
   const [text, setText] = useState('');
 
@@ -56,7 +59,8 @@ export default function Composer({
         left: 0,
         right: 0,
         bottom: 0,
-        px: 2,
+        pl: { xs: 2, md: `${leftOffset + 16}px` },
+        pr: 2,
         pb: 2,
         pt: 6,
         pointerEvents: 'none',

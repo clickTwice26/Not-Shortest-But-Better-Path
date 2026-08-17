@@ -232,7 +232,7 @@ export default function Home() {
           top: { xs: 66, md: 70 },
           left: { xs: 12, md: 16 },
           right: { xs: 12, md: 'auto' },
-          bottom: { xs: 'auto', md: 168 },
+          bottom: { xs: 'auto', md: 16 },
           width: { xs: 'auto', md: PANEL_WIDTH },
           maxHeight: { xs: '38dvh', md: 'none' },
           overflowY: 'auto',
@@ -336,6 +336,7 @@ export default function Home() {
         loading={loading}
         geminiActive={geminiActive}
         summary={result?.disclaimer}
+        leftOffset={PANEL_WIDTH + 16}
       />
 
       <TripSettingsDialog
