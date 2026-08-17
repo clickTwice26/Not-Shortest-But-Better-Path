@@ -50,13 +50,16 @@ export default function JourneyForm({
   onChange,
   onSubmit,
   loading,
+  hideSubmit = false,
 }: {
   value: JourneyFormValue;
   onChange: (v: JourneyFormValue) => void;
   onSubmit: () => void;
   loading: boolean;
+  /** The dialog supplies its own action buttons. */
+  hideSubmit?: boolean;
 }) {
-  const [showOptions, setShowOptions] = useState(false);
+  const [showOptions, setShowOptions] = useState(hideSubmit);
 
   // Mirror form -> parent without stale closures.
   const set = <K extends keyof JourneyFormValue>(key: K, v: JourneyFormValue[K]) =>
@@ -108,27 +111,29 @@ export default function JourneyForm({
         onAvoidChange={(v) => onChange({ ...value, avoid: v })}
       />
 
-      <Stack direction="row" spacing={1}>
-        <Button
-          variant="contained"
-          size="large"
-          fullWidth
-          startIcon={<SearchIcon />}
-          onClick={onSubmit}
-          disabled={!canSubmit}
-        >
-          {loading ? 'Planning…' : 'Update the plan'}
-        </Button>
-        <Button
-          variant="outlined"
-          size="large"
-          onClick={() => setShowOptions((v) => !v)}
-          aria-label="Options"
-          sx={{ minWidth: 48, px: 0 }}
-        >
-          <TuneIcon />
-        </Button>
-      </Stack>
+      {!hideSubmit && (
+        <Stack direction="row" spacing={1}>
+          <Button
+            variant="contained"
+            size="large"
+            fullWidth
+            startIcon={<SearchIcon />}
+            onClick={onSubmit}
+            disabled={!canSubmit}
+          >
+            {loading ? 'Planning…' : 'Update the plan'}
+          </Button>
+          <Button
+            variant="outlined"
+            size="large"
+            onClick={() => setShowOptions((v) => !v)}
+            aria-label="Options"
+            sx={{ minWidth: 48, px: 0 }}
+          >
+            <TuneIcon />
+          </Button>
+        </Stack>
+      )}
 
       <Collapse in={showOptions}>
         <Stack spacing={2}>

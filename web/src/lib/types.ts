@@ -70,9 +70,11 @@ export interface ParsedQuery {
   origin_text: string | null;
   destination_text: string | null;
   vot_bdt_per_min: number | null;
+  comfort_bdt_per_min: number | null;
   max_duration_min: number | null;
   max_cost_bdt: number | null;
   modes: string[];
+  avoid: string[];
   language: string | null;
   confidence: number;
   source: 'gemini' | 'heuristic';

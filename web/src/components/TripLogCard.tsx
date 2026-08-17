@@ -19,7 +19,7 @@ const EXAMPLE = 'cng e dhanmondi 27 theke farmgate 150 nilo, jam chilo tai beshi
  * The moat, one line at a time. Nobody fills a six-field form, so the input is
  * a sentence and the parse happens server-side.
  */
-export default function TripLogCard() {
+export default function TripLogCard({ flat = false }: { flat?: boolean }) {
   const [text, setText] = useState('');
   const [parsed, setParsed] = useState<ParsedTrip | null>(null);
   const [status, setStatus] = useState<{ kind: 'ok' | 'warn' | 'error'; message: string } | null>(
@@ -48,7 +48,7 @@ export default function TripLogCard() {
   };
 
   return (
-    <Card sx={{ p: 2.5 }}>
+    <Card sx={{ p: flat ? 0 : 2.5, ...(flat && { border: 'none', bgcolor: 'transparent' }) }}>
       <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 0.5 }}>
         <AutoAwesomeIcon fontSize="small" color="primary" />
         <Typography variant="subtitle1">What did you actually pay?</Typography>

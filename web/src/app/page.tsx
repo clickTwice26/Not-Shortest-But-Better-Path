@@ -2,28 +2,27 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Alert from '@mui/material/Alert';
-import AppBar from '@mui/material/AppBar';
 import Box from '@mui/material/Box';
-import Card from '@mui/material/Card';
 import Chip from '@mui/material/Chip';
-import Container from '@mui/material/Container';
-import Grid from '@mui/material/Grid';
+import Collapse from '@mui/material/Collapse';
 import IconButton from '@mui/material/IconButton';
 import LinearProgress from '@mui/material/LinearProgress';
+import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
-import Toolbar from '@mui/material/Toolbar';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
+import InsightsIcon from '@mui/icons-material/Insights';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import { useColorScheme } from '@mui/material/styles';
-import AskBar from '@/components/AskBar';
+import Composer from '@/components/Composer';
 import ItineraryCard from '@/components/ItineraryCard';
-import JourneyForm, { type JourneyFormValue } from '@/components/JourneyForm';
+import JourneyMap from '@/components/JourneyMap';
 import ParetoChart from '@/components/ParetoChart';
-import TripLogCard from '@/components/TripLogCard';
+import TripSettingsDialog from '@/components/TripSettingsDialog';
+import type { JourneyFormValue } from '@/components/JourneyForm';
 import { api, taka } from '@/lib/api';
-import type { ParsedQuery, PlanResult } from '@/lib/types';
+import type { Itinerary, ParsedQuery, PlanResult } from '@/lib/types';
 
 const DEFAULTS: JourneyFormValue = {
   origin: 'Dhanmondi 27',
@@ -35,17 +34,19 @@ const DEFAULTS: JourneyFormValue = {
   avoid: [],
 };
 
+const PANEL_WIDTH = 420;
+
 function ThemeToggle() {
   const { mode, setMode } = useColorScheme();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  if (!mounted) return <Box sx={{ width: 40, height: 40 }} />;
+  if (!mounted) return <Box sx={{ width: 34, height: 34 }} />;
 
   const dark = mode === 'dark';
   return (
     <Tooltip title={dark ? 'Light' : 'Dark'}>
-      <IconButton onClick={() => setMode(dark ? 'light' : 'dark')} aria-label="Toggle theme">
-        {dark ? <LightModeIcon /> : <DarkModeIcon />}
+      <IconButton size="small" onClick={() => setMode(dark ? 'light' : 'dark')} aria-label="Toggle theme">
+        {dark ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />}
       </IconButton>
     </Tooltip>
   );
@@ -59,6 +60,8 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<string | undefined>();
   const [geminiActive, setGeminiActive] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [showChart, setShowChart] = useState(false);
   const latest = useRef(0);
 
   useEffect(() => {
@@ -80,7 +83,7 @@ export default function Home() {
         owns: value.owns,
         avoid: value.avoid,
       });
-      // Drop stale responses — the slider fires these in bursts.
+      // Drop stale responses — the sliders fire these in bursts.
       if (ticket !== latest.current) return;
       setResult(res);
       setSelected(res.itineraries[0]?.id);
@@ -104,14 +107,14 @@ export default function Home() {
       setResult(res);
       setParsed(res.parsed_query ?? null);
       setSelected(res.itineraries[0]?.id);
-      if (res.parsed_query) {
-        setForm((f) => ({
-          ...f,
-          origin: res.origin.name,
-          destination: res.destination.name,
-          vot: res.vot_bdt_per_min,
-        }));
-      }
+      setForm((f) => ({
+        ...f,
+        origin: res.origin.name,
+        destination: res.destination.name,
+        vot: res.vot_bdt_per_min,
+        comfort: res.parsed_query?.comfort_bdt_per_min ?? f.comfort,
+        avoid: res.parsed_query?.avoid ?? [],
+      }));
     } catch (err) {
       if (ticket === latest.current) setError((err as Error).message);
     } finally {
@@ -119,188 +122,218 @@ export default function Home() {
     }
   }, []);
 
-  // First plan on mount.
   useEffect(() => {
     void run(DEFAULTS);
   }, [run]);
 
+  const shown: Itinerary | undefined = useMemo(() => {
+    if (!result) return undefined;
+    return (
+      result.pareto_front.find((i) => i.id === selected) ??
+      result.itineraries.find((i) => i.id === selected) ??
+      result.itineraries[0]
+    );
+  }, [result, selected]);
+
   const headline = useMemo(() => {
     if (!result) return null;
     const fastest = result.itineraries.find((i) => i.label === 'fastest');
-    // Lead with the mixed-mode option when there is one — that is the whole
-    // differentiator. A plain bus is cheap, but every other app shows it too.
+    // Lead with the mixed-mode option — that is the whole differentiator.
     const mixed = result.itineraries.find((i) => i.kind === 'multimodal');
     const best = mixed ?? result.itineraries[0];
     if (!best || !fastest || best.id === fastest.id || best.savings_vs_fastest <= 0) return null;
     return {
       saves: best.savings_vs_fastest,
       costsMin: Math.max(0, Math.round(best.minutes_vs_fastest)),
-      summary: best.summary,
       exclusive: best.kind === 'multimodal',
     };
   }, [result]);
 
   return (
-    <Box sx={{ minHeight: '100dvh', bgcolor: 'background.default' }}>
-      <AppBar
-        position="sticky"
-        elevation={0}
-        color="transparent"
+    <Box
+      sx={{
+        position: 'relative',
+        height: '100dvh',
+        overflow: 'hidden',
+        bgcolor: 'background.default',
+      }}
+    >
+      {/* The map is the page. Everything else floats over it. */}
+      <JourneyMap itinerary={shown} fill />
+
+      <Paper
+        elevation={6}
         sx={{
-          backdropFilter: 'blur(12px)',
-          bgcolor: 'background.surfaceContainerLow',
-          borderBottom: '1px solid',
+          position: 'absolute',
+          top: 12,
+          left: 12,
+          right: 12,
+          zIndex: 3,
+          px: 2,
+          py: 1,
+          borderRadius: 2,
+          overflow: 'hidden',
+          bgcolor: 'background.surfaceContainerLowest',
+          border: '1px solid',
           borderColor: 'divider',
         }}
       >
-        <Toolbar>
-          <Stack direction="row" spacing={1.5} sx={{ alignItems: "baseline", flex: 1 }}>
-            <Typography variant="h5" sx={{ fontWeight: 600, letterSpacing: '-0.02em' }}>
-              পথ
-            </Typography>
-            <Typography variant="h6" sx={{ fontWeight: 600 }}>
-              Poth
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' } }}>
-              cheaper ways across Dhaka
-            </Typography>
-          </Stack>
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 600, letterSpacing: '-0.02em' }}>
+            পথ
+          </Typography>
+          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+            Poth
+          </Typography>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            noWrap
+            sx={{ display: { xs: 'none', sm: 'block' }, minWidth: 0 }}
+          >
+            {result
+              ? `${result.origin.name} → ${result.destination.name}`
+              : 'cheaper ways across Dhaka'}
+          </Typography>
+          <Box sx={{ flex: 1 }} />
+          {result && (
+            <Tooltip title="Cost against time">
+              <IconButton
+                size="small"
+                onClick={() => setShowChart((v) => !v)}
+                color={showChart ? 'primary' : 'default'}
+              >
+                <InsightsIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
           <ThemeToggle />
-        </Toolbar>
-        {loading && <LinearProgress sx={{ position: 'absolute', bottom: 0, left: 0, right: 0 }} />}
-      </AppBar>
+        </Stack>
+        {loading && (
+          <LinearProgress sx={{ position: 'absolute', bottom: 0, left: 0, right: 0 }} />
+        )}
+      </Paper>
 
-      <Container maxWidth="lg" sx={{ py: { xs: 3, md: 5 } }}>
-        <Grid container spacing={3}>
-          <Grid size={{ xs: 12, md: 5 }}>
-            <Stack spacing={3} sx={{ position: { md: 'sticky' }, top: { md: 88 } }}>
-              <AskBar onSubmit={runNatural} loading={loading} geminiActive={geminiActive} />
+      {/* Results rail, floating like a directions panel. */}
+      <Box
+        sx={{
+          position: 'absolute',
+          zIndex: 2,
+          top: { xs: 66, md: 70 },
+          left: { xs: 12, md: 16 },
+          right: { xs: 12, md: 'auto' },
+          width: { xs: 'auto', md: PANEL_WIDTH },
+          maxHeight: { xs: '40dvh', md: 'calc(100dvh - 250px)' },
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          pr: 0.5,
+        }}
+      >
+        <Stack spacing={1.5}>
+          {error && (
+            <Alert severity="error" sx={{ borderRadius: 2 }}>
+              {error}
+            </Alert>
+          )}
 
-              <Card sx={{ p: { xs: 2.5, md: 3 } }}>
-                <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-                  Or set it yourself
+          {headline && (
+            <Paper
+              elevation={6}
+              sx={{
+                p: 1.75,
+                borderRadius: 2,
+                bgcolor: 'primary.light',
+                color: 'primary.dark',
+                border: '1px solid',
+                borderColor: 'primary.main',
+              }}
+            >
+              <Typography variant="h6" sx={{ fontWeight: 600, lineHeight: 1.25 }}>
+                Save {taka(headline.saves)}
+                {headline.costsMin > 0 ? ` for ${headline.costsMin} min` : ' and arrive sooner'}
+              </Typography>
+              {headline.exclusive && (
+                <Typography variant="caption">
+                  A mixed-mode route no other app will show you.
                 </Typography>
-                <JourneyForm
-                  value={form}
-                  onChange={setForm}
-                  onSubmit={() => run(form)}
-                  loading={loading}
+              )}
+            </Paper>
+          )}
+
+          {parsed && (
+            <Alert
+              severity="info"
+              sx={{ borderRadius: 2, py: 0 }}
+              onClose={() => setParsed(null)}
+            >
+              <Typography variant="caption">
+                Read by <strong>{parsed.source}</strong> · ৳{parsed.vot_bdt_per_min?.toFixed(1)}/min
+                {parsed.avoid.length > 0 && ` · avoiding ${parsed.avoid.join(', ')}`}
+              </Typography>
+            </Alert>
+          )}
+
+          {result?.itineraries.map((it) => (
+            <ItineraryCard
+              key={it.id}
+              itinerary={it}
+              highlight={it.id === selected}
+              onSelect={() => setSelected(it.id)}
+            />
+          ))}
+
+          <Collapse in={showChart} unmountOnExit>
+            {result && (
+              <Paper
+                elevation={6}
+                sx={{ p: 2, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}
+              >
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  The trade-off
+                </Typography>
+                <ParetoChart
+                  front={result.pareto_front}
+                  selectedId={selected}
+                  onSelect={setSelected}
                 />
-              </Card>
+              </Paper>
+            )}
+          </Collapse>
 
-              {parsed && (
-                <Alert severity="info" sx={{ borderRadius: 4 }} onClose={() => setParsed(null)}>
-                  <Typography variant="body2" sx={{ mb: 0.5 }}>
-                    Parsed by <strong>{parsed.source}</strong> — priority set the slider to ৳
-                    {parsed.vot_bdt_per_min?.toFixed(1)}/min.
-                  </Typography>
-                  <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: "wrap" }}>
-                    {parsed.origin_text && <Chip size="small" label={`from: ${parsed.origin_text}`} />}
-                    {parsed.destination_text && (
-                      <Chip size="small" label={`to: ${parsed.destination_text}`} />
-                    )}
-                    {parsed.max_duration_min && (
-                      <Chip size="small" label={`≤ ${parsed.max_duration_min} min`} />
-                    )}
-                  </Stack>
-                </Alert>
-              )}
-
-              <TripLogCard />
+          {result && (
+            <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap', pb: 1 }}>
+              <Chip size="small" variant="outlined" label={`${result.considered} routes`} />
+              <Chip
+                size="small"
+                variant="outlined"
+                label={result.geometry_source === 'osrm' ? 'road geometry' : 'estimated geometry'}
+              />
+              <Chip
+                size="small"
+                variant="outlined"
+                label={`${result.pareto_front.length} undominated`}
+              />
             </Stack>
-          </Grid>
+          )}
+        </Stack>
+      </Box>
 
-          <Grid size={{ xs: 12, md: 7 }}>
-            <Stack spacing={3}>
-              {error && (
-                <Alert severity="error" sx={{ borderRadius: 4 }}>
-                  {error}
-                </Alert>
-              )}
+      <Composer
+        onSubmit={runNatural}
+        onOpenSettings={() => setSettingsOpen(true)}
+        loading={loading}
+        geminiActive={geminiActive}
+        summary={result?.disclaimer}
+      />
 
-              {headline && (
-                <Box>
-                  <Typography variant="h2" sx={{ letterSpacing: '-0.02em' }}>
-                    Save {taka(headline.saves)}
-                    {headline.costsMin > 0 ? (
-                      <Typography component="span" variant="h2" color="text.secondary">
-                        {' '}
-                        for {headline.costsMin} min
-                      </Typography>
-                    ) : (
-                      <Typography component="span" variant="h2" color="primary.main">
-                        {' '}
-                        and get there sooner
-                      </Typography>
-                    )}
-                  </Typography>
-                  <Typography variant="body1" color="text.secondary" sx={{ mt: 0.5 }}>
-                    {headline.summary}
-                    {headline.exclusive ? ' — the route no other app will show you.' : ''}
-                  </Typography>
-                </Box>
-              )}
-
-              {result && (
-                <>
-                  <Stack spacing={2}>
-                    {result.itineraries.map((it) => (
-                      <ItineraryCard
-                        key={it.id}
-                        itinerary={it}
-                        highlight={it.id === selected}
-                        onSelect={() => setSelected(it.id)}
-                      />
-                    ))}
-                  </Stack>
-
-                  <Card sx={{ p: { xs: 2, md: 3 } }}>
-                    <Typography variant="subtitle1" sx={{ mb: 0.5 }}>
-                      The trade-off
-                    </Typography>
-                    <ParetoChart
-                      front={result.pareto_front}
-                      selectedId={selected}
-                      onSelect={setSelected}
-                    />
-                  </Card>
-
-                  <Stack
-                    direction="row"
-                    spacing={1}
-                   
-                    useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
-                    <Chip size="small" variant="outlined" label={`${result.considered} routes enumerated`} />
-                    <Chip
-                      size="small"
-                      variant="outlined"
-                      label={result.geometry_source === 'osrm' ? 'road geometry' : 'straight-line estimate'}
-                    />
-                    <Chip
-                      size="small"
-                      variant="outlined"
-                      label={`${result.pareto_front.length} on the Pareto front`}
-                    />
-                    {result.cached && <Chip size="small" variant="outlined" label="cached" />}
-                  </Stack>
-
-                  <Typography variant="caption" color="text.secondary">
-                    {result.disclaimer}
-                  </Typography>
-                </>
-              )}
-
-              {!result && !error && !loading && (
-                <Card sx={{ p: 4, textAlign: 'center' }}>
-                  <Typography color="text.secondary">
-                    Pick a start and an end to see the options.
-                  </Typography>
-                </Card>
-              )}
-            </Stack>
-          </Grid>
-        </Grid>
-      </Container>
+      <TripSettingsDialog
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        value={form}
+        onChange={setForm}
+        onSubmit={() => run(form)}
+        loading={loading}
+      />
     </Box>
   );
 }

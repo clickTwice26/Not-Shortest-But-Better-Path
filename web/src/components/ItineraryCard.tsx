@@ -15,7 +15,6 @@ import AirlineSeatReclineNormalIcon from '@mui/icons-material/AirlineSeatRecline
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import SwapCallsIcon from '@mui/icons-material/SwapCalls';
 import { alpha } from '@mui/material/styles';
-import JourneyMap from './JourneyMap';
 import ModeIcon, { useModeColor } from './ModeIcon';
 import { taka, minutes } from '@/lib/api';
 import type { Itinerary, Leg } from '@/lib/types';
@@ -102,7 +101,7 @@ export default function ItineraryCard({
           onSelect?.();
           setOpen((v) => !v);
         }}
-        sx={{ p: 2.5, borderRadius: 'inherit' }}
+        sx={{ p: 2, borderRadius: 'inherit' }}
       >
         <Stack direction="row" spacing={2} sx={{ alignItems: "flex-start", justifyContent: "space-between" }}>
           <Box sx={{ minWidth: 0 }}>
@@ -200,10 +199,7 @@ export default function ItineraryCard({
 
       <Collapse in={open} unmountOnExit>
         <Divider sx={{ opacity: 0.5 }} />
-        <Box sx={{ px: 2.5, pt: 2 }}>
-          <JourneyMap itinerary={itinerary} height={260} />
-        </Box>
-        <Box sx={{ px: 2.5, py: 1 }}>
+        <Box sx={{ px: 2, py: 0.5 }}>
           {itinerary.legs.map((leg, i) => (
             <LegRow key={i} leg={leg} />
           ))}
