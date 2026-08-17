@@ -29,9 +29,11 @@ QUERY_SCHEMA = {
         "origin_text": {"type": "string"},
         "destination_text": {"type": "string"},
         "priority": {"type": "string", "enum": ["cheapest", "balanced", "fastest"]},
+        "comfort_priority": {"type": "string", "enum": ["ignore", "normal", "important"]},
         "max_duration_min": {"type": "number"},
         "max_cost_bdt": {"type": "number"},
         "modes": {"type": "array", "items": {"type": "string"}},
+        "avoid": {"type": "array", "items": {"type": "string", "enum": list(MODES.keys())}},
         "language": {"type": "string"},
         "confidence": {"type": "number"},
     },
@@ -52,6 +54,34 @@ TRIP_SCHEMA = {
     "required": ["mode", "fare_paid", "confidence"],
 }
 
+ADDRESS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "canonical": {"type": "string"},
+        "area": {"type": "string"},
+        "search_queries": {"type": "array", "items": {"type": "string"}},
+        "confidence": {"type": "number"},
+    },
+    "required": ["canonical", "search_queries", "confidence"],
+}
+
+ADDRESS_PROMPT = """You normalise informal Dhaka addresses so a geocoder can find them.
+
+Input examples: "emk tower", "mirpur 10 golchottor er pashe", "bashundhara R/A
+block D road 5", "DIU permanent campus".
+
+Return:
+- canonical: the proper full name of the place as it would be signposted
+- area: the neighbourhood or road it sits on, if you know it
+- search_queries: 2-4 strings to try against an OpenStreetMap geocoder, best
+  first. Include the canonical name alone, the name with the area, and any
+  common alternative name or expansion of an abbreviation. Keep them short.
+
+NEVER output latitude or longitude. You are normalising text, not geocoding.
+If you do not recognise the place, echo the input and set confidence low.
+
+Input: {text}"""
+
 QUERY_PROMPT = """You parse journey requests for a Dhaka transport app.
 Input is code-mixed Bengali-Latin ("Banglish"), Bengali script, or English.
 
@@ -61,6 +91,15 @@ place names, normalise spelling, or invent coordinates.
 priority: "cheapest" if they mention saving money (taka bachate, sasta, kom
 khoroch), "fastest" if they mention hurry (taratari, joldi, late), else
 "balanced".
+
+comfort_priority: "important" if they mention comfort, crowding, heat, AC, or
+not wanting to stand (bhir, gorom, ac chai, araam, standing). "ignore" if they
+say they only care about price. Otherwise "normal".
+
+avoid: modes they refuse. "bus e jabo na" / "no bus" -> ["bus"].
+"rickshaw chai na" -> ["rickshaw"]. Only include an explicit refusal.
+
+modes: modes they specifically ASK for. Leave empty unless they name one.
 Set max_duration_min / max_cost_bdt only when an explicit number is given.
 confidence is 0-1 for how sure you are about origin and destination.
 
@@ -181,12 +220,29 @@ def heuristic_query(text: str) -> dict:
     if m:
         max_cost = float(m.group(1) or m.group(2))
 
-    modes = [mid for mid, words in _MODE_WORDS.items() if any(w in low for w in words)]
+    # "bus e jabo na" / "no bus" is a refusal, not a request.
+    avoid, modes = [], []
+    for mid, words in _MODE_WORDS.items():
+        for w in words:
+            idx = low.find(w)
+            if idx < 0:
+                continue
+            tail = low[idx : idx + len(w) + 24]
+            (avoid if re.search(r"\b(na|nai|no|chai na|without|bad)\b", tail) else modes).append(mid)
+            break
+
+    comfort_priority = "normal"
+    if any(w in low for w in ("ac", "araam", "aram", "comfort", "bhir", "vir", "gorom", "আরাম")):
+        comfort_priority = "important"
+    elif priority == "cheapest":
+        comfort_priority = "ignore"
 
     return {
         "origin_text": origin,
         "destination_text": dest,
         "priority": priority,
+        "comfort_priority": comfort_priority,
+        "avoid": avoid,
         "max_duration_min": max_duration,
         "max_cost_bdt": max_cost,
         "modes": modes,
@@ -242,6 +298,7 @@ def heuristic_trip(text: str) -> dict:
 # ---------------------------------------------------------------------------
 
 PRIORITY_VOT = {"cheapest": 0.5, "balanced": 2.0, "fastest": 6.0}
+COMFORT_WEIGHT = {"ignore": 0.0, "normal": 1.0, "important": 4.0}
 
 
 async def parse_query(text: str) -> dict:
@@ -252,16 +309,47 @@ async def parse_query(text: str) -> dict:
         source = "heuristic"
 
     priority = result.get("priority") or "balanced"
+    comfort = result.get("comfort_priority") or "normal"
     return {
         "origin_text": result.get("origin_text"),
         "destination_text": result.get("destination_text"),
         "vot_bdt_per_min": PRIORITY_VOT.get(priority, 2.0),
+        "comfort_bdt_per_min": COMFORT_WEIGHT.get(comfort, 1.0),
         "max_duration_min": result.get("max_duration_min"),
         "max_cost_bdt": result.get("max_cost_bdt"),
         "modes": result.get("modes") or [],
+        "avoid": [m for m in (result.get("avoid") or []) if m in MODES],
         "language": result.get("language"),
         "confidence": float(result.get("confidence") or 0.0),
         "source": source,
+    }
+
+
+async def normalize_address(text: str) -> dict:
+    """Informal phrasing -> canonical names to try against a geocoder.
+
+    A translation layer, never a geocoder: coordinates stay out of the model's
+    hands because it will invent plausible ones (PLAN.md §7).
+    """
+    result = await _generate(ADDRESS_PROMPT.format(text=text), ADDRESS_SCHEMA)
+    if result is None:
+        return {"canonical": text, "area": None, "search_queries": [], "confidence": 0.0}
+
+    queries = [q for q in (result.get("search_queries") or []) if isinstance(q, str) and q.strip()]
+    canonical = (result.get("canonical") or text).strip()
+    area = (result.get("area") or "").strip() or None
+    if canonical and canonical.lower() not in {q.lower() for q in queries}:
+        queries.insert(0, canonical)
+    if area and canonical:
+        combined = f"{canonical}, {area}"
+        if combined.lower() not in {q.lower() for q in queries}:
+            queries.append(combined)
+
+    return {
+        "canonical": canonical,
+        "area": area,
+        "search_queries": queries[:4],
+        "confidence": float(result.get("confidence") or 0.0),
     }
 
 

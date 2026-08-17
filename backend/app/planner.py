@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 
 from .fares import FareBook
 from .geo import LatLng, road_km
-from .modes import STREET_MODES, get_mode, is_usable
+from .modes import MAX_COMFORT, STREET_MODES, get_mode, is_usable
 from .modes import duration_min as mode_duration_min
 from .network import STATIONS, Station, transit_lookup
 from .routing import RouteLeg, estimate, pair_key, route_matrix
@@ -76,6 +76,23 @@ class Itinerary:
     minutes_vs_fastest: float = 0.0
 
     @property
+    def discomfort_min(self) -> float:
+        """Minutes of travel, weighted by how unpleasant each leg is.
+
+        Time-weighted on purpose: ten minutes on a packed bus is an annoyance,
+        ninety minutes is the reason people pay for a car instead.
+        """
+        return sum(leg.duration_min * get_mode(leg.mode).discomfort for leg in self.legs)
+
+    @property
+    def comfort(self) -> float:
+        """1-5, averaged over the journey by time spent in each mode."""
+        total = sum(leg.duration_min for leg in self.legs)
+        if total <= 0:
+            return MAX_COMFORT
+        return sum(leg.duration_min * get_mode(leg.mode).comfort for leg in self.legs) / total
+
+    @property
     def confidence(self) -> str:
         sources = {leg.cost_source for leg in self.legs if leg.cost_bdt > 0}
         if not sources:
@@ -97,10 +114,32 @@ class Itinerary:
             "generalized_cost": round(self.generalized_cost, 1),
             "savings_vs_fastest": round(self.savings_vs_fastest),
             "minutes_vs_fastest": round(self.minutes_vs_fastest),
+            "comfort": round(self.comfort, 2),
+            "comfort_label": comfort_label(self.comfort),
+            "worst_leg": worst_leg_note(self.legs),
             "cost_confidence": self.confidence,
             "summary": " → ".join(get_mode(leg.mode).label for leg in self.legs),
             "legs": [leg.to_dict() for leg in self.legs],
         }
+
+
+def comfort_label(score: float) -> str:
+    if score >= 4.0:
+        return "Comfortable"
+    if score >= 3.2:
+        return "Decent"
+    if score >= 2.4:
+        return "Rough"
+    return "Punishing"
+
+
+def worst_leg_note(legs: list[Leg]) -> str | None:
+    """Name the leg that will actually bother the traveller."""
+    scored = [(get_mode(leg.mode), leg) for leg in legs]
+    worst_mode, worst = min(scored, key=lambda pair: pair[0].comfort)
+    if worst_mode.comfort >= 3.5 or not worst_mode.comfort_note:
+        return None
+    return f"{round(worst.duration_min)} min — {worst_mode.comfort_note.lower()}"
 
 
 @dataclass
@@ -110,11 +149,16 @@ class PlanRequest:
     destination: LatLng
     destination_name: str
     vot_bdt_per_min: float = 2.0
+    # Taka per minute of maximally-unpleasant travel. 0 means price and time
+    # only, which always picks the bus.
+    comfort_bdt_per_min: float = 1.0
     modes: tuple[str, ...] = ()
     owns: tuple[str, ...] = ()
+    avoid: tuple[str, ...] = ()
     surge: float = 1.0
     max_duration_min: float | None = None
     max_cost_bdt: float | None = None
+    min_comfort: float | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -245,6 +289,7 @@ def build_itineraries(
     routes: Routes | None = None,
 ) -> list[Itinerary]:
     allowed = set(req.modes) if req.modes else set(STREET_MODES) | {"metro"}
+    allowed -= set(req.avoid)  # "avoid bus" is a hard exclusion, not a penalty
     owns = set(req.owns)
     out: list[Itinerary] = []
     counter = itertools.count()
@@ -317,26 +362,34 @@ def build_itineraries(
 
 
 def pareto_front(itineraries: list[Itinerary]) -> list[Itinerary]:
-    """Keep only itineraries not beaten on cost AND time simultaneously."""
+    """Keep only itineraries not beaten on cost, time AND comfort at once.
+
+    Comfort is a third axis rather than a tiebreak. With two axes the bus wins
+    the cheap corner outright and every more pleasant option looks dominated,
+    which is exactly the answer people reject in practice.
+    """
+
+    def objectives(it: Itinerary) -> tuple[float, float, float]:
+        return (it.cost_bdt, it.duration_min, it.discomfort_min)
+
     front: list[Itinerary] = []
     for cand in itineraries:
+        c = objectives(cand)
         dominated = False
         for other in itineraries:
             if other is cand:
                 continue
-            cheaper_or_equal = other.cost_bdt <= cand.cost_bdt
-            faster_or_equal = other.duration_min <= cand.duration_min
-            strictly_better = other.cost_bdt < cand.cost_bdt or other.duration_min < cand.duration_min
-            if cheaper_or_equal and faster_or_equal and strictly_better:
+            o = objectives(other)
+            if all(o[i] <= c[i] for i in range(3)) and any(o[i] < c[i] for i in range(3)):
                 dominated = True
                 break
         if not dominated:
             front.append(cand)
 
-    # Two options with identical cost and time add nothing; keep the simpler one.
-    seen: dict[tuple[int, int], Itinerary] = {}
+    # Options identical on every axis add nothing; keep the simplest one.
+    seen: dict[tuple[int, int, int], Itinerary] = {}
     for it in front:
-        key = (round(it.cost_bdt), round(it.duration_min))
+        key = (round(it.cost_bdt), round(it.duration_min), round(it.discomfort_min))
         if key not in seen or len(it.legs) < len(seen[key].legs):
             seen[key] = it
     return sorted(seen.values(), key=lambda i: i.duration_min)
@@ -347,12 +400,14 @@ def pareto_front(itineraries: list[Itinerary]) -> list[Itinerary]:
 # ---------------------------------------------------------------------------
 
 
-def rank_and_label(front: list[Itinerary], vot: float) -> list[Itinerary]:
+def rank_and_label(front: list[Itinerary], vot: float, comfort_weight: float = 0.0) -> list[Itinerary]:
     if not front:
         return []
 
     for it in front:
-        it.generalized_cost = it.cost_bdt + vot * it.duration_min
+        it.generalized_cost = (
+            it.cost_bdt + vot * it.duration_min + comfort_weight * it.discomfort_min
+        )
 
     fastest = min(front, key=lambda i: i.duration_min)
     cheapest = min(front, key=lambda i: i.cost_bdt)
@@ -372,6 +427,13 @@ def rank_and_label(front: list[Itinerary], vot: float) -> list[Itinerary]:
     remaining = [i for i in front if i.label is None]
     if remaining:
         min(remaining, key=lambda i: i.generalized_cost).label = "best_value"
+
+    # Surface the nicest ride available, when it is not already on the board.
+    remaining = [i for i in front if i.label is None]
+    if remaining:
+        nicest = max(remaining, key=lambda i: (i.comfort, -i.generalized_cost))
+        if nicest.comfort > min(i.comfort for i in front if i.label):
+            nicest.label = "most_comfortable"
 
     return sorted(front, key=lambda i: i.generalized_cost)
 
@@ -397,8 +459,11 @@ async def plan(req: PlanRequest, fares: FareBook, stations: list[Station] | None
     if req.max_cost_bdt is not None:
         within = [i for i in front if i.cost_bdt <= req.max_cost_bdt]
         front = within or front
+    if req.min_comfort is not None:
+        within = [i for i in front if i.comfort >= req.min_comfort]
+        front = within or front
 
-    ranked = rank_and_label(front, req.vot_bdt_per_min)
+    ranked = rank_and_label(front, req.vot_bdt_per_min, req.comfort_bdt_per_min)
 
     # Labels collapse when one itinerary is both cheapest and best value. Always
     # offer three cards, topping up from the ranking — the mixed-mode option

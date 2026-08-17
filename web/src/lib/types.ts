@@ -36,7 +36,7 @@ export interface Leg {
 
 export interface Itinerary {
   id: string;
-  label: 'fastest' | 'best_value' | 'cheapest' | null;
+  label: 'fastest' | 'best_value' | 'cheapest' | 'most_comfortable' | null;
   kind: 'direct' | 'multimodal';
   cost_bdt: number;
   duration_min: number;
@@ -44,6 +44,9 @@ export interface Itinerary {
   generalized_cost: number;
   savings_vs_fastest: number;
   minutes_vs_fastest: number;
+  comfort: number;
+  comfort_label: 'Comfortable' | 'Decent' | 'Rough' | 'Punishing';
+  worst_leg: string | null;
   cost_confidence: CostConfidence;
   summary: string;
   legs: Leg[];
@@ -57,6 +60,7 @@ export interface PlanResult {
   pareto_front: Itinerary[];
   considered: number;
   cost_confidence: CostConfidence;
+  geometry_source: 'osrm' | 'estimate';
   disclaimer: string;
   cached?: boolean;
   parsed_query?: ParsedQuery;
@@ -90,7 +94,7 @@ export interface Place {
   name: string;
   lat: number;
   lng: number;
-  aliases: string[];
+  source: 'landmark' | 'photon' | 'nominatim' | string;
 }
 
 export interface PlanRequestBody {
@@ -99,8 +103,10 @@ export interface PlanRequestBody {
   origin?: Point;
   destination?: Point;
   vot_bdt_per_min?: number;
+  comfort_bdt_per_min?: number;
   modes?: string[];
   owns?: string[];
+  avoid?: string[];
   surge?: number;
   max_duration_min?: number | null;
   max_cost_bdt?: number | null;

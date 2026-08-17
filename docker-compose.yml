@@ -58,11 +58,11 @@ services:
   web:
     build:
       context: ./web
-      args:
-        # Baked into the client bundle, so it must be the address the BROWSER
-        # can reach — not the compose service name.
-        NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-http://localhost:8000}
     container_name: poth-web
+    environment:
+      # Server-side proxy target for /api/* — the browser never sees this, so
+      # the compose service name is correct here. One public origin, no CORS.
+      API_ORIGIN: http://api:8000
     ports:
       - "3000:3000"
     depends_on:

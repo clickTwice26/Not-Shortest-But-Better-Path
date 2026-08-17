@@ -11,9 +11,11 @@ import Stack from '@mui/material/Stack';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import ExpandMore from '@mui/icons-material/ExpandMore';
+import AirlineSeatReclineNormalIcon from '@mui/icons-material/AirlineSeatReclineNormal';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import SwapCallsIcon from '@mui/icons-material/SwapCalls';
 import { alpha } from '@mui/material/styles';
+import JourneyMap from './JourneyMap';
 import ModeIcon, { useModeColor } from './ModeIcon';
 import { taka, minutes } from '@/lib/api';
 import type { Itinerary, Leg } from '@/lib/types';
@@ -22,6 +24,14 @@ const LABELS: Record<string, { text: string; tone: 'primary' | 'info' | 'seconda
   best_value: { text: 'Best value', tone: 'primary' },
   fastest: { text: 'Fastest', tone: 'info' },
   cheapest: { text: 'Cheapest', tone: 'secondary' },
+  most_comfortable: { text: 'Most comfortable', tone: 'info' },
+};
+
+const COMFORT_COLOR: Record<string, 'success' | 'info' | 'warning' | 'error'> = {
+  Comfortable: 'success',
+  Decent: 'info',
+  Rough: 'warning',
+  Punishing: 'error',
 };
 
 function LegRow({ leg }: { leg: Leg }) {
@@ -66,9 +76,11 @@ function LegRow({ leg }: { leg: Leg }) {
 export default function ItineraryCard({
   itinerary,
   highlight = false,
+  onSelect,
 }: {
   itinerary: Itinerary;
   highlight?: boolean;
+  onSelect?: () => void;
 }) {
   const [open, setOpen] = useState(highlight);
   const label = itinerary.label ? LABELS[itinerary.label] : undefined;
@@ -85,7 +97,13 @@ export default function ItineraryCard({
         transition: 'border-color .2s, background-color .2s',
       }}
     >
-      <CardActionArea onClick={() => setOpen((v) => !v)} sx={{ p: 2.5, borderRadius: 'inherit' }}>
+      <CardActionArea
+        onClick={() => {
+          onSelect?.();
+          setOpen((v) => !v);
+        }}
+        sx={{ p: 2.5, borderRadius: 'inherit' }}
+      >
         <Stack direction="row" spacing={2} sx={{ alignItems: "flex-start", justifyContent: "space-between" }}>
           <Box sx={{ minWidth: 0 }}>
             {label && (
@@ -153,6 +171,15 @@ export default function ItineraryCard({
               sx={{ borderColor: 'divider' }}
             />
           )}
+          <Tooltip title={itinerary.worst_leg ?? 'Comfort across the whole journey'} arrow>
+            <Chip
+              size="small"
+              variant="outlined"
+              icon={<AirlineSeatReclineNormalIcon />}
+              label={itinerary.comfort_label}
+              color={COMFORT_COLOR[itinerary.comfort_label] ?? 'default'}
+            />
+          </Tooltip>
           <Chip
             size="small"
             variant="outlined"
@@ -173,6 +200,9 @@ export default function ItineraryCard({
 
       <Collapse in={open} unmountOnExit>
         <Divider sx={{ opacity: 0.5 }} />
+        <Box sx={{ px: 2.5, pt: 2 }}>
+          <JourneyMap itinerary={itinerary} height={260} />
+        </Box>
         <Box sx={{ px: 2.5, py: 1 }}>
           {itinerary.legs.map((leg, i) => (
             <LegRow key={i} leg={leg} />

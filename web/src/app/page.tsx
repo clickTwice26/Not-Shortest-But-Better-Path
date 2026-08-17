@@ -17,19 +17,22 @@ import Typography from '@mui/material/Typography';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import { useColorScheme } from '@mui/material/styles';
+import AskBar from '@/components/AskBar';
 import ItineraryCard from '@/components/ItineraryCard';
 import JourneyForm, { type JourneyFormValue } from '@/components/JourneyForm';
 import ParetoChart from '@/components/ParetoChart';
 import TripLogCard from '@/components/TripLogCard';
 import { api, taka } from '@/lib/api';
-import type { ParsedQuery, Place, PlanResult } from '@/lib/types';
+import type { ParsedQuery, PlanResult } from '@/lib/types';
 
 const DEFAULTS: JourneyFormValue = {
   origin: 'Dhanmondi 27',
   destination: 'Uttara Sector 7',
   vot: 2,
+  comfort: 1,
   modes: ['walk', 'rickshaw', 'cng', 'bike_hail', 'car_hail', 'bus', 'metro'],
   owns: [],
+  avoid: [],
 };
 
 function ThemeToggle() {
@@ -50,16 +53,16 @@ function ThemeToggle() {
 
 export default function Home() {
   const [form, setForm] = useState<JourneyFormValue>(DEFAULTS);
-  const [places, setPlaces] = useState<Place[]>([]);
   const [result, setResult] = useState<PlanResult | null>(null);
   const [parsed, setParsed] = useState<ParsedQuery | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<string | undefined>();
+  const [geminiActive, setGeminiActive] = useState(false);
   const latest = useRef(0);
 
   useEffect(() => {
-    api.places().then(setPlaces).catch(() => setPlaces([]));
+    api.health().then((h) => setGeminiActive(h.gemini)).catch(() => setGeminiActive(false));
   }, []);
 
   const run = useCallback(async (value: JourneyFormValue) => {
@@ -72,8 +75,10 @@ export default function Home() {
         origin_text: value.origin,
         destination_text: value.destination,
         vot_bdt_per_min: value.vot,
+        comfort_bdt_per_min: value.comfort,
         modes: value.modes,
         owns: value.owns,
+        avoid: value.avoid,
       });
       // Drop stale responses — the slider fires these in bursts.
       if (ticket !== latest.current) return;
@@ -169,13 +174,16 @@ export default function Home() {
         <Grid container spacing={3}>
           <Grid size={{ xs: 12, md: 5 }}>
             <Stack spacing={3} sx={{ position: { md: 'sticky' }, top: { md: 88 } }}>
+              <AskBar onSubmit={runNatural} loading={loading} geminiActive={geminiActive} />
+
               <Card sx={{ p: { xs: 2.5, md: 3 } }}>
+                <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+                  Or set it yourself
+                </Typography>
                 <JourneyForm
-                  places={places}
                   value={form}
                   onChange={setForm}
                   onSubmit={() => run(form)}
-                  onNaturalSubmit={runNatural}
                   loading={loading}
                 />
               </Card>
@@ -241,6 +249,7 @@ export default function Home() {
                         key={it.id}
                         itinerary={it}
                         highlight={it.id === selected}
+                        onSelect={() => setSelected(it.id)}
                       />
                     ))}
                   </Stack>
@@ -262,6 +271,11 @@ export default function Home() {
                    
                     useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
                     <Chip size="small" variant="outlined" label={`${result.considered} routes enumerated`} />
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      label={result.geometry_source === 'osrm' ? 'road geometry' : 'straight-line estimate'}
+                    />
                     <Chip
                       size="small"
                       variant="outlined"

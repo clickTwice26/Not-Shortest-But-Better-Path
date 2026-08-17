@@ -66,45 +66,55 @@ MODES: dict[str, Mode] = {
     "walk": Mode(
         id="walk", label="Walk", label_bn="হাঁটা", icon="walk",
         speed_kmh=4.5, max_km=3.0, confidence="official",
+        comfort=2.0, comfort_note="Heat, dust, and broken footpaths",
     ),
     "bicycle": Mode(
         id="bicycle", label="Bicycle", label_bn="সাইকেল", icon="bike",
         speed_kmh=12.0, requires_ownership=True, parkable_at_station=True,
         max_km=15.0, confidence="official",
+        comfort=2.5, comfort_note="Exposed to traffic and weather",
     ),
     "bike_own": Mode(
         id="bike_own", label="Own motorbike", label_bn="নিজের বাইক", icon="motorbike",
         speed_kmh=25.0, requires_ownership=True, parkable_at_station=True,
         wait_min=2.0, max_km=40.0,
+        comfort=3.0, comfort_note="Fast, but exposed",
     ),
     "bike_hail": Mode(
         id="bike_hail", label="Bike (Pathao/Uber)", label_bn="বাইক", icon="motorbike",
         speed_kmh=24.0, wait_min=5.0, min_km=0.8, max_km=40.0,
+        comfort=2.5, comfort_note="Pillion seat, helmet, no shelter",
     ),
     "rickshaw": Mode(
         id="rickshaw", label="Rickshaw", label_bn="রিকশা", icon="rickshaw",
         speed_kmh=8.0, wait_min=3.0, min_km=0.3, max_km=6.0,
+        comfort=3.0, comfort_note="Seated and open — fine over short hops",
     ),
     "cng": Mode(
         id="cng", label="CNG auto-rickshaw", label_bn="সিএনজি", icon="auto",
         speed_kmh=16.0, wait_min=6.0, min_km=1.0, max_km=30.0,
+        comfort=3.0, comfort_note="Seated, caged, no AC",
     ),
     "car_own": Mode(
         id="car_own", label="Own car", label_bn="নিজের গাড়ি", icon="car",
         speed_kmh=17.0, requires_ownership=True, parkable_at_station=False,
         wait_min=3.0, max_km=60.0,
+        comfort=4.5, comfort_note="Seated, AC, private",
     ),
     "car_hail": Mode(
         id="car_hail", label="Car (Uber/Pathao)", label_bn="কার", icon="car",
         speed_kmh=16.0, wait_min=7.0, min_km=1.0, max_km=60.0,
+        comfort=4.5, comfort_note="Seated, AC, door to door",
     ),
     "bus": Mode(
         id="bus", label="Bus", label_bn="বাস", icon="bus",
         speed_kmh=11.0, wait_min=8.0, min_km=1.5, max_km=40.0, confidence="official",
+        comfort=1.0, comfort_note="Crowded, often standing, no AC",
     ),
     "metro": Mode(
         id="metro", label="Metro (MRT-6)", label_bn="মেট্রোরেল", icon="metro",
         speed_kmh=35.0, confidence="official",
+        comfort=4.0, comfort_note="AC, predictable, no traffic",
     ),
 }
 

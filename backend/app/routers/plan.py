@@ -25,6 +25,16 @@ async def _resolve(point, text, places, field: str) -> tuple[LatLng, str]:
 
     # Then OSM. Anything found is written back so the table learns.
     hit = await geocoder.geocode(text)
+
+    # Still nothing: let Gemini normalise the phrasing and try again. This is
+    # the tier that turns "emk tower" into "EMK Center, Gulshan Avenue".
+    if hit is None:
+        normalized = await gemini.normalize_address(text)
+        for candidate in normalized["search_queries"]:
+            hit = await geocoder.geocode(candidate)
+            if hit is not None:
+                break
+
     if hit is None:
         raise HTTPException(
             404, f"could not find '{text}' in Dhaka. Try a nearby landmark or road name."
@@ -45,7 +55,7 @@ async def create_plan(body: PlanRequestBody) -> dict:
     origin, origin_name = await _resolve(body.origin, body.origin_text, places, "origin")
     dest, dest_name = await _resolve(body.destination, body.destination_text, places, "destination")
 
-    unknown = [m for m in (*body.modes, *body.owns) if m not in MODES]
+    unknown = [m for m in (*body.modes, *body.owns, *body.avoid) if m not in MODES]
     if unknown:
         raise HTTPException(422, f"unknown modes: {', '.join(unknown)}")
 
@@ -59,11 +69,14 @@ async def create_plan(body: PlanRequestBody) -> dict:
             destination=dest,
             destination_name=dest_name,
             vot_bdt_per_min=body.vot_bdt_per_min,
+            comfort_bdt_per_min=body.comfort_bdt_per_min,
             modes=tuple(body.modes),
             owns=tuple(body.owns),
+            avoid=tuple(body.avoid),
             surge=body.surge,
             max_duration_min=body.max_duration_min,
             max_cost_bdt=body.max_cost_bdt,
+            min_comfort=body.min_comfort,
         ),
         fares,
         stations,
@@ -92,7 +105,9 @@ async def plan_natural(body: ParseTextBody) -> dict:
             origin_text=parsed["origin_text"],
             destination_text=parsed["destination_text"],
             vot_bdt_per_min=parsed["vot_bdt_per_min"],
+            comfort_bdt_per_min=parsed.get("comfort_bdt_per_min", 1.0),
             modes=parsed.get("modes") or [],
+            avoid=parsed.get("avoid") or [],
             max_duration_min=parsed.get("max_duration_min"),
             max_cost_bdt=parsed.get("max_cost_bdt"),
         )

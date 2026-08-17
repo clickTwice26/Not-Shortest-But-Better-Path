@@ -18,11 +18,15 @@ class PlanRequestBody(BaseModel):
 
     departure_time: datetime | None = None
     vot_bdt_per_min: float = Field(default=2.0, ge=0.0, le=20.0)
+    # Taka per minute of maximally-unpleasant travel. At 0 the bus always wins.
+    comfort_bdt_per_min: float = Field(default=1.0, ge=0.0, le=20.0)
     modes: list[str] = Field(default_factory=list)
     owns: list[str] = Field(default_factory=list)
+    avoid: list[str] = Field(default_factory=list)
     surge: float = Field(default=1.0, ge=1.0, le=3.0)
     max_duration_min: float | None = None
     max_cost_bdt: float | None = None
+    min_comfort: float | None = Field(default=None, ge=1.0, le=5.0)
 
 
 class PlaceOut(BaseModel):
@@ -68,9 +72,11 @@ class ParsedQuery(BaseModel):
     origin_text: str | None = None
     destination_text: str | None = None
     vot_bdt_per_min: float | None = None
+    comfort_bdt_per_min: float | None = None
     max_duration_min: float | None = None
     max_cost_bdt: float | None = None
     modes: list[str] = Field(default_factory=list)
+    avoid: list[str] = Field(default_factory=list)
     language: str | None = None
     confidence: float = 0.0
     source: str = "heuristic"

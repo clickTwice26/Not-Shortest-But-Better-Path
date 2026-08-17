@@ -1,7 +1,8 @@
 import type { ParsedTrip, Place, PlanRequestBody, PlanResult } from './types';
 
-export const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, '') ?? 'http://localhost:8000';
+// Same-origin by default: next.config.ts rewrites /api/* to FastAPI, so one
+// domain serves both. Set NEXT_PUBLIC_API_BASE only to point at a separate host.
+export const API_BASE = process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, '') ?? '/api';
 
 export class ApiError extends Error {
   constructor(message: string, readonly status: number) {
