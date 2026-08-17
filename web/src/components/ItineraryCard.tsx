@@ -27,7 +27,7 @@ const LABELS: Record<string, { text: string; tone: 'primary' | 'info' | 'seconda
 function LegRow({ leg }: { leg: Leg }) {
   const color = useModeColor(leg.mode);
   return (
-    <Stack direction="row" spacing={1.5} alignItems="flex-start" sx={{ py: 1 }}>
+    <Stack direction="row" spacing={1.5} sx={{ alignItems: "flex-start", py: 1 }}>
       <Box
         sx={{
           width: 36,
@@ -86,7 +86,7 @@ export default function ItineraryCard({
       }}
     >
       <CardActionArea onClick={() => setOpen((v) => !v)} sx={{ p: 2.5, borderRadius: 'inherit' }}>
-        <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={2}>
+        <Stack direction="row" spacing={2} sx={{ alignItems: "flex-start", justifyContent: "space-between" }}>
           <Box sx={{ minWidth: 0 }}>
             {label && (
               <Chip
@@ -97,9 +97,9 @@ export default function ItineraryCard({
                 sx={{ mb: 1, ...(highlight && { bgcolor: 'primary.main', color: 'primary.contrastText' }) }}
               />
             )}
-            <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+            <Stack direction="row" spacing={0.75} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
               {itinerary.legs.map((leg, i) => (
-                <Stack key={i} direction="row" spacing={0.75} alignItems="center">
+                <Stack key={i} direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
                   {i > 0 && (
                     <Typography variant="caption" sx={{ opacity: 0.5 }}>
                       →
@@ -115,7 +115,7 @@ export default function ItineraryCard({
             <Typography variant="h4" sx={{ fontWeight: 600, lineHeight: 1.1 }}>
               {taka(itinerary.cost_bdt)}
             </Typography>
-            <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="flex-end">
+            <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", justifyContent: "flex-end" }}>
               <ScheduleIcon sx={{ fontSize: 14, opacity: 0.7 }} />
               <Typography variant="body2" sx={{ opacity: 0.85 }}>
                 {minutes(itinerary.duration_min)}
@@ -127,10 +127,10 @@ export default function ItineraryCard({
         <Stack
           direction="row"
           spacing={1}
-          alignItems="center"
-          flexWrap="wrap"
+         
+         
           useFlexGap
-          sx={{ mt: 1.5 }}
+          sx={{ alignItems: "center", flexWrap: "wrap", mt: 1.5 }}
         >
           {saves > 0 && (
             <Chip

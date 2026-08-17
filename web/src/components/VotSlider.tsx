@@ -35,7 +35,7 @@ export default function VotSlider({
 
   return (
     <Box>
-      <Stack direction="row" alignItems="baseline" justifyContent="space-between" sx={{ mb: 0.5 }}>
+      <Stack direction="row" sx={{ alignItems: "baseline", justifyContent: "space-between", mb: 0.5 }}>
         <Typography variant="overline" color="text.secondary">
           What is a minute worth?
         </Typography>
@@ -44,7 +44,7 @@ export default function VotSlider({
         </Typography>
       </Stack>
 
-      <Stack direction="row" spacing={1.5} alignItems="center">
+      <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
         <SavingsIcon fontSize="small" sx={{ color: 'text.secondary' }} />
         <Slider
           value={value}

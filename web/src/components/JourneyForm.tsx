@@ -83,7 +83,7 @@ export default function JourneyForm({
 
   return (
     <Stack spacing={2.5}>
-      <Stack direction="row" spacing={1} alignItems="center">
+      <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
         <Stack spacing={1.5} sx={{ flex: 1 }}>
           <Autocomplete
             freeSolo
@@ -95,13 +95,16 @@ export default function JourneyForm({
                 {...params}
                 label="From"
                 placeholder="Dhanmondi 27"
-                InputProps={{
-                  ...params.InputProps,
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <MyLocationIcon fontSize="small" color="primary" />
-                    </InputAdornment>
-                  ),
+                slotProps={{
+                  ...params.slotProps,
+                  input: {
+                    ...params.slotProps.input,
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <MyLocationIcon fontSize="small" color="primary" />
+                      </InputAdornment>
+                    ),
+                  },
                 }}
               />
             )}
@@ -116,13 +119,16 @@ export default function JourneyForm({
                 {...params}
                 label="To"
                 placeholder="Uttara Sector 7"
-                InputProps={{
-                  ...params.InputProps,
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <PlaceIcon fontSize="small" color="error" />
-                    </InputAdornment>
-                  ),
+                slotProps={{
+                  ...params.slotProps,
+                  input: {
+                    ...params.slotProps.input,
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <PlaceIcon fontSize="small" color="error" />
+                      </InputAdornment>
+                    ),
+                  },
                 }}
               />
             )}
@@ -214,23 +220,25 @@ export default function JourneyForm({
                 if (e.key === 'Enter' && natural.trim()) onNaturalSubmit(natural.trim());
               }}
               placeholder="Farmgate theke Uttara, taka bachate chai but 40 min er beshi na"
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <AutoAwesomeIcon fontSize="small" color="primary" />
-                  </InputAdornment>
-                ),
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <Button
-                      size="small"
-                      onClick={() => natural.trim() && onNaturalSubmit(natural.trim())}
-                      disabled={!natural.trim() || loading}
-                    >
-                      Parse
-                    </Button>
-                  </InputAdornment>
-                ),
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <AutoAwesomeIcon fontSize="small" color="primary" />
+                    </InputAdornment>
+                  ),
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <Button
+                        size="small"
+                        onClick={() => natural.trim() && onNaturalSubmit(natural.trim())}
+                        disabled={!natural.trim() || loading}
+                      >
+                        Parse
+                      </Button>
+                    </InputAdornment>
+                  ),
+                },
               }}
             />
           </Box>

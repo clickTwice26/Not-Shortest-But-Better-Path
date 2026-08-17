@@ -49,7 +49,7 @@ export default function TripLogCard() {
 
   return (
     <Card sx={{ p: 2.5 }}>
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+      <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 0.5 }}>
         <AutoAwesomeIcon fontSize="small" color="primary" />
         <Typography variant="subtitle1">What did you actually pay?</Typography>
       </Stack>
@@ -67,7 +67,7 @@ export default function TripLogCard() {
         sx={{ mb: 1.5 }}
       />
 
-      <Stack direction="row" spacing={1} alignItems="center">
+      <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
         <Button variant="contained" onClick={submit} disabled={!text.trim() || busy}>
           {busy ? 'Reading…' : 'Log trip'}
         </Button>
@@ -81,7 +81,7 @@ export default function TripLogCard() {
           <Typography variant="overline" color="text.secondary">
             Extracted ({parsed.source})
           </Typography>
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
+          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", mt: 0.5 }}>
             {parsed.mode && <Chip size="small" label={`mode: ${parsed.mode}`} />}
             {parsed.origin_text && <Chip size="small" label={`from: ${parsed.origin_text}`} />}
             {parsed.dest_text && <Chip size="small" label={`to: ${parsed.dest_text}`} />}

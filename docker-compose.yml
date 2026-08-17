@@ -1,6 +1,9 @@
 services:
   postgres:
-    image: postgis/postgis:16-3.4
+    # Multi-arch PostGIS build — the official postgis/postgis tags are amd64
+    # only, which fails on Apple Silicon. To use the official image instead:
+    #   POSTGIS_IMAGE=postgis/postgis:17-3.5  (and add `platform: linux/amd64`)
+    image: ${POSTGIS_IMAGE:-imresamu/postgis:17-3.5}
     container_name: poth-postgres
     environment:
       POSTGRES_USER: poth
@@ -18,7 +21,7 @@ services:
       retries: 20
 
   redis:
-    image: redis:7-alpine
+    image: redis:8-alpine
     container_name: poth-redis
     ports:
       - "6380:6379"
@@ -27,6 +30,45 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+
+  api:
+    build: ./backend
+    container_name: poth-api
+    environment:
+      DATABASE_URL: postgresql://poth:poth@postgres:5432/poth
+      REDIS_URL: redis://redis:6379/0
+      CORS_ORIGINS: http://localhost:3000
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./web
+      args:
+        # Baked into the client bundle, so it must be the address the BROWSER
+        # can reach — not the compose service name.
+        NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-http://localhost:8000}
+    container_name: poth-web
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_started
+    restart: unless-stopped
 
 volumes:
   poth-pgdata:

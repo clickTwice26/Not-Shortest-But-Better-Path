@@ -8,42 +8,53 @@ Design doc: [PLAN.md](PLAN.md). This repo implements Phase 0/1 of it.
 
 ## Run it
 
-Three terminals. The backend answers with bundled seed data even if Postgres and
-Redis are down, so you can skip step 1 for a quick demo.
-
-### 1. Infrastructure (optional but recommended)
+Everything is containerised — one command brings up Postgres+PostGIS, Redis, the
+FastAPI planner and the Next.js frontend, and seeds the database on the way up.
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
 
-Postgres+PostGIS on `5433`, Redis on `6380` — offset ports so they don't collide
-with anything already running.
+| Service | URL |
+|---|---|
+| Web | http://localhost:3000 |
+| API docs | http://localhost:8000/docs |
+| Health | http://localhost:8000/health |
+| Postgres | `localhost:5433` (`poth`/`poth`) |
+| Redis | `localhost:6380` |
 
-### 2. Backend
+Ports are offset so they don't collide with anything already running.
 
 ```bash
-cd backend && python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt && python -m scripts.seed && uvicorn app.main:app --reload --port 8000
+docker compose logs -f api web
 ```
 
-Docs at http://localhost:8000/docs, health at http://localhost:8000/health.
+### Gemini (optional)
 
-### 3. Frontend
+```bash
+cp .env.example .env   # then set GEMINI_API_KEY and re-run docker compose up -d
+```
+
+Without a key, Banglish parsing falls back to a keyword heuristic and everything
+still works — the response says which path ran via `source`.
+
+### Local development, without containers
+
+The API answers from bundled seed data even when Postgres and Redis are down, so
+the backend runs standalone:
+
+```bash
+cd backend && python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt && uvicorn app.main:app --reload --port 8000
+```
 
 ```bash
 cd web && npm install && npm run dev
 ```
 
-http://localhost:3000
+## Versions
 
-### Gemini (optional)
-
-```bash
-echo "GEMINI_API_KEY=your_key" >> backend/.env
-```
-
-Without a key, Banglish parsing falls back to a keyword heuristic and everything
-still works — the response tells you which path ran via `source`.
+Next.js 16 · React 19.2 · MUI 9 (Material 3 tonal palettes) · FastAPI 0.141 ·
+Python 3.13 · Postgres 17 + PostGIS 3.5 · Redis 8
 
 ---
 

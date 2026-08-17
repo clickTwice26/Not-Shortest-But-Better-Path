@@ -7,7 +7,7 @@ import Box from '@mui/material/Box';
 import Card from '@mui/material/Card';
 import Chip from '@mui/material/Chip';
 import Container from '@mui/material/Container';
-import Grid from '@mui/material/Grid2';
+import Grid from '@mui/material/Grid';
 import IconButton from '@mui/material/IconButton';
 import LinearProgress from '@mui/material/LinearProgress';
 import Stack from '@mui/material/Stack';
@@ -145,7 +145,7 @@ export default function Home() {
         }}
       >
         <Toolbar>
-          <Stack direction="row" spacing={1.5} alignItems="baseline" sx={{ flex: 1 }}>
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: "baseline", flex: 1 }}>
             <Typography variant="h5" sx={{ fontWeight: 600, letterSpacing: '-0.02em' }}>
               পথ
             </Typography>
@@ -182,7 +182,7 @@ export default function Home() {
                     Parsed by <strong>{parsed.source}</strong> — priority set the slider to ৳
                     {parsed.vot_bdt_per_min?.toFixed(1)}/min.
                   </Typography>
-                  <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                  <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: "wrap" }}>
                     {parsed.origin_text && <Chip size="small" label={`from: ${parsed.origin_text}`} />}
                     {parsed.destination_text && (
                       <Chip size="small" label={`to: ${parsed.destination_text}`} />
@@ -254,10 +254,8 @@ export default function Home() {
                   <Stack
                     direction="row"
                     spacing={1}
-                    flexWrap="wrap"
-                    useFlexGap
-                    alignItems="center"
-                  >
+                   
+                    useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
                     <Chip size="small" variant="outlined" label={`${result.considered} routes enumerated`} />
                     <Chip
                       size="small"
