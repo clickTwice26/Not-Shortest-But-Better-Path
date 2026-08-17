@@ -1,0 +1,32 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: poth-postgres
+    environment:
+      POSTGRES_USER: poth
+      POSTGRES_PASSWORD: poth
+      POSTGRES_DB: poth
+    ports:
+      - "5433:5432"
+    volumes:
+      - poth-pgdata:/var/lib/postgresql/data
+      - ./backend/sql/001_schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U poth -d poth"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: poth-redis
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  poth-pgdata:
