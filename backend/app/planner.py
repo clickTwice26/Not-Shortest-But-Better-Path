@@ -17,10 +17,11 @@ import itertools
 from dataclasses import dataclass, field
 
 from .fares import FareBook
-from .geo import LatLng, leg_geometry, road_km
+from .geo import LatLng, road_km
 from .modes import STREET_MODES, get_mode, is_usable
 from .modes import duration_min as mode_duration_min
 from .network import STATIONS, Station, transit_lookup
+from .routing import RouteLeg, estimate, pair_key, route_matrix
 
 # Cost of a mode change beyond the vehicle's own wait: finding the stand,
 # crossing the road, the general friction of switching.
@@ -156,6 +157,9 @@ def candidate_nodes(
 # ---------------------------------------------------------------------------
 
 
+Routes = dict[tuple, RouteLeg]
+
+
 def _street_leg(
     mode_id: str,
     a: LatLng,
@@ -164,12 +168,16 @@ def _street_leg(
     b_name: str,
     fares: FareBook,
     surge: float,
+    routes: Routes | None = None,
 ) -> Leg | None:
-    distance = road_km(a, b)
+    route = (routes or {}).get(pair_key(a, b)) or estimate(a, b)
+    distance = route.distance_km
     if not is_usable(mode_id, distance):
         return None
 
     mode = get_mode(mode_id)
+    # Distance comes from the router; duration does not — a generic router's
+    # speeds are badly wrong for Dhaka.
     ride = mode_duration_min(mode_id, distance)
     return Leg(
         mode=mode_id,
@@ -182,11 +190,21 @@ def _street_leg(
         wait_min=mode.wait_min,
         cost_bdt=fares.cost_bdt(mode_id, distance, surge=surge),
         cost_source=fares.source(mode_id),
-        geometry=leg_geometry(a, b),
+        geometry=route.geometry,
     )
 
 
-def _transit_leg(entry: Station, exit_: Station, fares: FareBook) -> Leg | None:
+def _metro_geometry(entry: Station, exit_: Station, stations: list[Station]) -> list[list[float]]:
+    """Trace the line through every station actually passed through."""
+    lo, hi = sorted((entry.sequence, exit_.sequence))
+    span = [s for s in stations if lo <= s.sequence <= hi]
+    span.sort(key=lambda s: s.sequence, reverse=entry.sequence > exit_.sequence)
+    return [[s.lng, s.lat] for s in span]
+
+
+def _transit_leg(
+    entry: Station, exit_: Station, fares: FareBook, stations: list[Station]
+) -> Leg | None:
     ride = transit_lookup(entry, exit_)
     if ride is None:
         return None
@@ -201,7 +219,7 @@ def _transit_leg(entry: Station, exit_: Station, fares: FareBook) -> Leg | None:
         wait_min=ride.wait_min,
         cost_bdt=ride.fare_bdt,
         cost_source=fares.source("metro"),
-        geometry=leg_geometry(entry.point, exit_.point),
+        geometry=_metro_geometry(entry, exit_, stations),
     )
 
 
@@ -220,7 +238,12 @@ def _assemble(legs: list[Leg], kind: str, idx: int) -> Itinerary:
     )
 
 
-def build_itineraries(req: PlanRequest, fares: FareBook, stations: list[Station]) -> list[Itinerary]:
+def build_itineraries(
+    req: PlanRequest,
+    fares: FareBook,
+    stations: list[Station],
+    routes: Routes | None = None,
+) -> list[Itinerary]:
     allowed = set(req.modes) if req.modes else set(STREET_MODES) | {"metro"}
     owns = set(req.owns)
     out: list[Itinerary] = []
@@ -239,7 +262,7 @@ def build_itineraries(req: PlanRequest, fares: FareBook, stations: list[Station]
             continue
         leg = _street_leg(
             mode_id, req.origin, req.destination,
-            req.origin_name, req.destination_name, fares, req.surge,
+            req.origin_name, req.destination_name, fares, req.surge, routes,
         )
         if leg:
             out.append(_assemble([leg], "direct", next(counter)))
@@ -257,7 +280,7 @@ def build_itineraries(req: PlanRequest, fares: FareBook, stations: list[Station]
         for entry, exit_ in itertools.product(entries, exits):
             if entry.id == exit_.id:
                 continue
-            transit = _transit_leg(entry, exit_, fares)
+            transit = _transit_leg(entry, exit_, fares, stations)
             if transit is None:
                 continue
 
@@ -272,13 +295,13 @@ def build_itineraries(req: PlanRequest, fares: FareBook, stations: list[Station]
 
                 access = _street_leg(
                     access_id, req.origin, entry.point,
-                    req.origin_name, entry.name, fares, req.surge,
+                    req.origin_name, entry.name, fares, req.surge, routes,
                 )
                 if access is None:
                     continue
                 egress = _street_leg(
                     egress_id, exit_.point, req.destination,
-                    exit_.name, req.destination_name, fares, req.surge,
+                    exit_.name, req.destination_name, fares, req.surge, routes,
                 )
                 if egress is None:
                     continue
@@ -333,7 +356,6 @@ def rank_and_label(front: list[Itinerary], vot: float) -> list[Itinerary]:
 
     fastest = min(front, key=lambda i: i.duration_min)
     cheapest = min(front, key=lambda i: i.cost_bdt)
-    best_value = min(front, key=lambda i: i.generalized_cost)
 
     for it in front:
         it.savings_vs_fastest = fastest.cost_bdt - it.cost_bdt
@@ -343,16 +365,29 @@ def rank_and_label(front: list[Itinerary], vot: float) -> list[Itinerary]:
     fastest.label = "fastest"
     if cheapest.label is None:
         cheapest.label = "cheapest"
-    if best_value.label is None:
-        best_value.label = "best_value"
+
+    # "Best value" is the one in between — the option people actually want. If
+    # the lowest generalized cost is already the fastest or the cheapest, that
+    # badge would vanish, so pick the best of what is left instead.
+    remaining = [i for i in front if i.label is None]
+    if remaining:
+        min(remaining, key=lambda i: i.generalized_cost).label = "best_value"
 
     return sorted(front, key=lambda i: i.generalized_cost)
 
 
-def plan(req: PlanRequest, fares: FareBook, stations: list[Station] | None = None) -> dict:
+async def plan(req: PlanRequest, fares: FareBook, stations: list[Station] | None = None) -> dict:
     stations = stations if stations is not None else STATIONS
 
-    all_itineraries = build_itineraries(req, fares, stations)
+    # Prune with cheap haversine first, then fetch real routes only for the
+    # pairs that survived: 2k + 1 calls, not k^2.
+    entries, exits = candidate_nodes(req, stations)
+    pairs: list[tuple[LatLng, LatLng]] = [(req.origin, req.destination)]
+    pairs += [(req.origin, st.point) for st in entries]
+    pairs += [(st.point, req.destination) for st in exits]
+    routes = await route_matrix(pairs)
+
+    all_itineraries = build_itineraries(req, fares, stations, routes)
     front = pareto_front(all_itineraries)
 
     if req.max_duration_min is not None:
@@ -364,7 +399,16 @@ def plan(req: PlanRequest, fares: FareBook, stations: list[Station] | None = Non
         front = within or front
 
     ranked = rank_and_label(front, req.vot_bdt_per_min)
-    recommended = [i for i in ranked if i.label] or ranked[:3]
+
+    # Labels collapse when one itinerary is both cheapest and best value. Always
+    # offer three cards, topping up from the ranking — the mixed-mode option
+    # sitting just behind the winner is the whole reason this app exists.
+    recommended = [i for i in ranked if i.label]
+    for it in ranked:
+        if len(recommended) >= 3:
+            break
+        if it not in recommended:
+            recommended.append(it)
 
     confidences = {i.confidence for i in ranked}
     overall = "official" if confidences == {"official"} else "estimated"
@@ -381,6 +425,9 @@ def plan(req: PlanRequest, fares: FareBook, stations: list[Station] | None = Non
         "pareto_front": [i.to_dict() for i in ranked],
         "considered": len(all_itineraries),
         "cost_confidence": overall,
+        "geometry_source": (
+            "osrm" if any(r.source == "osrm" for r in routes.values()) else "estimate"
+        ),
         "disclaimer": (
             "Metro and bus use published rates. CNG, rickshaw and ride-hail fares are "
             "seed estimates corrected by user trip logs."

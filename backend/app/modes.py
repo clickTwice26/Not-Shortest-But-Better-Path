@@ -32,6 +32,9 @@ ModeId = Literal[
 Confidence = Literal["official", "estimated", "crowdsourced"]
 
 
+MAX_COMFORT = 5.0
+
+
 @dataclass(frozen=True)
 class Mode:
     id: str
@@ -47,6 +50,16 @@ class Mode:
     min_km: float = 0.0
     max_km: float = 1e9
     confidence: Confidence = "estimated"
+    # 1 = standing in a packed non-AC bus, 5 = seated in AC.
+    # Without this the planner always lands on the bus, because the bus is
+    # always cheapest and money alone cannot express why people avoid it.
+    comfort: float = 3.0
+    comfort_note: str = ""
+
+    @property
+    def discomfort(self) -> float:
+        """0 (best) to 1 (worst), for the generalized-cost penalty."""
+        return (MAX_COMFORT - self.comfort) / (MAX_COMFORT - 1.0)
 
 
 MODES: dict[str, Mode] = {

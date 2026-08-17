@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
-from .. import cache, gemini, repository
+from .. import cache, gemini, geocoder, repository
 from ..config import settings
 from ..geo import LatLng
 from ..modes import MODES
@@ -17,10 +17,20 @@ async def _resolve(point, text, places, field: str) -> tuple[LatLng, str]:
         return LatLng(lat=point.lat, lng=point.lng), text or f"{point.lat:.4f}, {point.lng:.4f}"
     if not text:
         raise HTTPException(422, f"{field} requires coordinates or text")
+
+    # Curated landmarks first — instant and hand-checked.
     match = repository.resolve_place(text, places)
-    if match is None:
-        raise HTTPException(404, f"could not resolve {field}: '{text}'")
-    return match.point, match.canonical
+    if match is not None:
+        return match.point, match.canonical
+
+    # Then OSM. Anything found is written back so the table learns.
+    hit = await geocoder.geocode(text)
+    if hit is None:
+        raise HTTPException(
+            404, f"could not find '{text}' in Dhaka. Try a nearby landmark or road name."
+        )
+    await repository.remember_place(hit.name, text, hit.lat, hit.lng)
+    return hit.point, hit.name
 
 
 @router.post("/plan")
@@ -42,7 +52,7 @@ async def create_plan(body: PlanRequestBody) -> dict:
     stations = await repository.load_stations()
     fares = await repository.load_farebook()
 
-    result = plan(
+    result = await plan(
         PlanRequest(
             origin=origin,
             origin_name=origin_name,
@@ -113,17 +123,32 @@ async def list_stations() -> list[StationOut]:
 
 @router.get("/places")
 async def list_places(q: str | None = None, limit: int = 50) -> list[dict]:
+    """Autocomplete: curated landmarks first, then anything else in Dhaka."""
     places = await repository.load_places()
-    if q:
-        low = q.strip().lower()
-        places = [
-            p for p in places
-            if low in p.canonical.lower() or any(low in a.lower() for a in p.aliases)
+    if not q:
+        return [
+            {"id": p.id, "name": p.canonical, "lat": p.lat, "lng": p.lng, "source": "landmark"}
+            for p in places[:limit]
         ]
-    return [
-        {"id": p.id, "name": p.canonical, "lat": p.lat, "lng": p.lng, "aliases": list(p.aliases)}
-        for p in places[:limit]
+
+    low = q.strip().lower()
+    local = [
+        {"id": p.id, "name": p.canonical, "lat": p.lat, "lng": p.lng, "source": "landmark"}
+        for p in places
+        if low in p.canonical.lower() or any(low in a.lower() for a in p.aliases)
     ]
+
+    remote = await geocoder.search(low, limit=max(0, limit - len(local)))
+    seen = {row["name"].lower() for row in local}
+    for hit in remote:
+        if hit.name.lower() in seen:
+            continue
+        seen.add(hit.name.lower())
+        local.append(
+            {"id": 0, "name": hit.name, "lat": hit.lat, "lng": hit.lng, "source": hit.source}
+        )
+
+    return local[:limit]
 
 
 @router.get("/modes")

@@ -78,7 +78,7 @@ export default function Home() {
       // Drop stale responses — the slider fires these in bursts.
       if (ticket !== latest.current) return;
       setResult(res);
-      setSelected(res.itineraries.find((i) => i.label === 'best_value')?.id);
+      setSelected(res.itineraries[0]?.id);
     } catch (err) {
       if (ticket === latest.current) {
         setError((err as Error).message);
@@ -98,7 +98,7 @@ export default function Home() {
       if (ticket !== latest.current) return;
       setResult(res);
       setParsed(res.parsed_query ?? null);
-      setSelected(res.itineraries.find((i) => i.label === 'best_value')?.id);
+      setSelected(res.itineraries[0]?.id);
       if (res.parsed_query) {
         setForm((f) => ({
           ...f,
@@ -121,13 +121,17 @@ export default function Home() {
 
   const headline = useMemo(() => {
     if (!result) return null;
-    const best = result.itineraries.find((i) => i.label === 'best_value');
     const fastest = result.itineraries.find((i) => i.label === 'fastest');
+    // Lead with the mixed-mode option when there is one — that is the whole
+    // differentiator. A plain bus is cheap, but every other app shows it too.
+    const mixed = result.itineraries.find((i) => i.kind === 'multimodal');
+    const best = mixed ?? result.itineraries[0];
     if (!best || !fastest || best.id === fastest.id || best.savings_vs_fastest <= 0) return null;
     return {
       saves: best.savings_vs_fastest,
       costsMin: Math.max(0, Math.round(best.minutes_vs_fastest)),
       summary: best.summary,
+      exclusive: best.kind === 'multimodal',
     };
   }, [result]);
 
@@ -223,7 +227,8 @@ export default function Home() {
                     )}
                   </Typography>
                   <Typography variant="body1" color="text.secondary" sx={{ mt: 0.5 }}>
-                    {headline.summary} — the route no other app will show you.
+                    {headline.summary}
+                    {headline.exclusive ? ' — the route no other app will show you.' : ''}
                   </Typography>
                 </Box>
               )}

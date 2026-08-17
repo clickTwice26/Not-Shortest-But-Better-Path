@@ -8,8 +8,10 @@ Idempotent — safe to re-run.
 from __future__ import annotations
 
 import asyncio
+import datetime
 import pathlib
 import sys
+from decimal import Decimal
 
 import asyncpg
 
@@ -54,6 +56,9 @@ async def main() -> None:
         )
 
         print("seeding MRT-6 route + stop times...")
+        # asyncpg binds TIME from datetime.time, not from a string.
+        service_start = datetime.time.fromisoformat(MRT6_SERVICE_START)
+        service_end = datetime.time.fromisoformat(MRT6_SERVICE_END)
         route_id = await conn.fetchval(
             """
             INSERT INTO transit_routes (id, short_name, long_name, mode)
@@ -67,12 +72,12 @@ async def main() -> None:
                 """
                 INSERT INTO transit_stop_times (route_id, station_id, stop_sequence,
                                                 headway_seconds, service_start, service_end)
-                VALUES ($1, $2, $3, $4, $5::time, $6::time)
+                VALUES ($1, $2, $3, $4, $5, $6)
                 ON CONFLICT (route_id, station_id) DO UPDATE
                    SET stop_sequence = EXCLUDED.stop_sequence
                 """,
                 route_id, s.id, s.sequence, MRT6_HEADWAY_MIN * 60,
-                MRT6_SERVICE_START, MRT6_SERVICE_END,
+                service_start, service_end,
             )
 
         rows = fare_matrix()
@@ -84,7 +89,7 @@ async def main() -> None:
             ON CONFLICT (from_station_id, to_station_id) DO UPDATE
                SET fare_bdt = EXCLUDED.fare_bdt
             """,
-            rows,
+            [(a, b, Decimal(str(fare))) for a, b, fare in rows],
         )
 
         print(f"seeding {len(FARE_RULES)} fare rules...")
@@ -94,10 +99,13 @@ async def main() -> None:
                 """
                 INSERT INTO fare_rules (mode, region, base_fare, base_km, rate_per_km,
                                         min_fare, source, effective_from)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8::date)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 """,
-                r.mode, r.region, r.base_fare, r.base_km, r.rate_per_km,
-                r.min_fare, r.source, r.effective_from,
+                r.mode, r.region,
+                # NUMERIC columns bind from Decimal, not float.
+                Decimal(str(r.base_fare)), Decimal(str(r.base_km)),
+                Decimal(str(r.rate_per_km)), Decimal(str(r.min_fare)),
+                r.source, datetime.date.fromisoformat(r.effective_from),
             )
 
         print(f"seeding {len(LANDMARKS)} landmarks...")

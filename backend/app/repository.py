@@ -170,6 +170,28 @@ def resolve_place(query: str, places: list[Landmark]) -> Landmark | None:
     return None
 
 
+async def remember_place(canonical: str, query: str, lat: float, lng: float) -> None:
+    """Persist a remote geocode so the local gazetteer grows with use."""
+    p = db.pool()
+    if p is None:
+        return
+    alias = query.strip().lower()
+    try:
+        await p.execute(
+            """
+            INSERT INTO landmarks (canonical, aliases, geom)
+            VALUES ($1, $2, ST_SetSRID(ST_MakePoint($3, $4), 4326)::geography)
+            ON CONFLICT (canonical) DO UPDATE
+               SET aliases = ARRAY(
+                       SELECT DISTINCT unnest(landmarks.aliases || EXCLUDED.aliases)
+                   )
+            """,
+            canonical, [alias] if alias else [], lng, lat,
+        )
+    except Exception as exc:  # noqa: BLE001 - learning is best-effort
+        log.warning("could not remember place %r (%s)", canonical, exc)
+
+
 async def insert_trip_log(payload: dict) -> int | None:
     p = db.pool()
     if p is None:

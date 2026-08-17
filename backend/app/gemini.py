@@ -129,16 +129,32 @@ _MODE_WORDS = {
 }
 
 
-def _split_od(text: str) -> tuple[str | None, str | None]:
+# Words that trail a place name rather than belong to it.
+_TRAILING_NOISE = (
+    r"\b(jabo|jete|jaite|chai|gelam|gechi|যাব|যেতে|nilo|nilam|niyeche|dilam|dilo"
+    r"|lagse|laglo|khoroch|taka|tk|bdt)\b.*$"
+)
+# Mode words that lead a sentence: "cng e dhanmondi 27 theke ..."
+_LEADING_MODE = r"^(?:cng|rickshaw|riksha|rikshaw|bus|metro|mrt|pathao|uber|bike|moto|car|cab|auto)\b\s*(?:e|te|diye|kore)?\s*"
+
+
+def _clean_place(text: str, fare: float | None = None) -> str:
+    out = re.sub(_LEADING_MODE, "", text.strip())
+    out = re.sub(_TRAILING_NOISE, "", out)
+    # Dhaka place names end in numbers constantly — Dhanmondi 27, Gulshan 2,
+    # Uttara Sector 7 — so only strip a trailing number that IS the fare.
+    if fare is not None:
+        out = re.sub(rf"\s+{int(fare)}\s*$", "", out)
+    return out.strip(" ,.-")
+
+
+def _split_od(text: str, fare: float | None = None) -> tuple[str | None, str | None]:
     low = f" {text.lower()} "
     for sep in _SEPARATORS:
         if sep in low:
             left, _, right = low.partition(sep)
-            left = re.split(r"[,;]", left)[-1].strip()
-            right = re.split(r"[,;]", right)[0].strip()
-            right = re.sub(
-                r"\b(jabo|jete|jaite|chai|jabo|যাব|যেতে)\b.*$", "", right
-            ).strip()
+            left = _clean_place(re.split(r"[,;]", left)[-1], fare)
+            right = _clean_place(re.split(r"[,;]", right)[0], fare)
             if left and right:
                 return left, right
     return None, None
@@ -181,7 +197,6 @@ def heuristic_query(text: str) -> dict:
 
 def heuristic_trip(text: str) -> dict:
     low = text.lower()
-    origin, dest = _split_od(text)
 
     mode = None
     for mid, words in _MODE_WORDS.items():
@@ -189,10 +204,19 @@ def heuristic_trip(text: str) -> dict:
             mode = mid
             break
 
-    fare = None
-    m = re.search(r"(\d{2,4})\s*(?:taka|tk|৳|bdt|nilo|nilo\.|dilam|lagse|laglo)?", low)
+    # A number next to a payment word beats any other number in the sentence —
+    # otherwise "dhanmondi 27 theke farmgate 150 nilo" reads the fare as 27.
+    paid = r"taka|tk|৳|bdt|nilo|nilam|dilam|dilo|lagse|laglo|khoroch|niyeche"
+    m = re.search(rf"(\d{{2,4}})\s*(?:{paid})", low) or re.search(rf"(?:{paid})\s*(\d{{2,4}})", low)
     if m:
         fare = float(m.group(1))
+    else:
+        # Fall back to the largest number — fares outrun road and sector numbers.
+        numbers = [float(n) for n in re.findall(r"\b(\d{2,4})\b", low)]
+        fare = max(numbers) if numbers else None
+
+    # Fare first, so place cleaning knows which trailing number to drop.
+    origin, dest = _split_od(text, fare)
 
     conditions = None
     if any(w in low for w in ("jam", "traffic", "জ্যাম")):
