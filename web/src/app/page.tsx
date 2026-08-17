@@ -17,7 +17,7 @@ import LightModeIcon from '@mui/icons-material/LightMode';
 import { useColorScheme } from '@mui/material/styles';
 import Composer from '@/components/Composer';
 import ItineraryCard from '@/components/ItineraryCard';
-import JourneyMap from '@/components/JourneyMap';
+import JourneyView from '@/components/JourneyView';
 import ParetoChart from '@/components/ParetoChart';
 import TripSettingsDialog from '@/components/TripSettingsDialog';
 import type { JourneyFormValue } from '@/components/JourneyForm';
@@ -158,8 +158,18 @@ export default function Home() {
         bgcolor: 'background.default',
       }}
     >
-      {/* The map is the page. Everything else floats over it. */}
-      <JourneyMap itinerary={shown} fill />
+      {/* The selected journey, drawn large. */}
+      <Box
+        sx={{
+          position: 'absolute',
+          inset: 0,
+          pt: { xs: 8, md: 9 },
+          pb: { xs: 22, md: 20 },
+          pl: { xs: 0, md: `${PANEL_WIDTH + 40}px` },
+        }}
+      >
+        <JourneyView itinerary={shown} />
+      </Box>
 
       <Paper
         elevation={6}
@@ -222,11 +232,13 @@ export default function Home() {
           top: { xs: 66, md: 70 },
           left: { xs: 12, md: 16 },
           right: { xs: 12, md: 'auto' },
+          bottom: { xs: 'auto', md: 168 },
           width: { xs: 'auto', md: PANEL_WIDTH },
-          maxHeight: { xs: '40dvh', md: 'calc(100dvh - 250px)' },
+          maxHeight: { xs: '38dvh', md: 'none' },
           overflowY: 'auto',
           overflowX: 'hidden',
           pr: 0.5,
+          pb: 2,
         }}
       >
         <Stack spacing={1.5}>
