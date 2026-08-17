@@ -11,18 +11,17 @@ export const metadata: Metadata = {
     'Google Maps tells you the fastest way. Poth tells you that CNG to Farmgate then metro saves you ৳270 and costs you 9 minutes.',
 };
 
+// Light is the default scheme, so the browser chrome matches it regardless of
+// the OS preference. Dark stays reachable through the in-app toggle.
 export const viewport: Viewport = {
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#F9FBF9' },
-    { media: '(prefers-color-scheme: dark)', color: '#101413' },
-  ],
+  themeColor: '#F9FBF9',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning className={inter.variable}>
       <body style={{ margin: 0 }}>
-        <InitColorSchemeScript attribute="class" defaultMode="system" />
+        <InitColorSchemeScript attribute="class" defaultMode="light" />
         <Providers>{children}</Providers>
       </body>
     </html>
